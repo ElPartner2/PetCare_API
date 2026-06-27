@@ -1,4 +1,4 @@
-# ETAPA 1: Construcción base (Instala dependencias)
+# Instala dependencias
 FROM python:3.13-slim AS builder
 
 RUN mkdir /app
@@ -11,14 +11,14 @@ RUN pip install --upgrade pip
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ETAPA 2: Producción (Solo código limpio)
+# Producción 
 FROM python:3.13-slim
 
 RUN useradd -m -r appuser && \
     mkdir /app && \
     chown -R appuser /app
 
-# Copia las librerías instaladas desde la etapa 1
+# Copia las librerías instaladas
 COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
