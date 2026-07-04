@@ -22,14 +22,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = document.getElementById('email').value.trim();
+    const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
 
     try {
         const response = await fetch(`${API_URL}/token/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ username, password })
         });
 
         if (!response.ok) {
@@ -41,8 +41,8 @@ loginForm.addEventListener('submit', async (e) => {
         const data = await response.json();
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
-        localStorage.setItem('user_email', email);
-        localStorage.setItem('username', email);
+        localStorage.setItem('user_email', '');
+        localStorage.setItem('username', username);
 
         loginError.classList.add('hidden');
         showDashboard();

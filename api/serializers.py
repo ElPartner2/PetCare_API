@@ -5,18 +5,18 @@ from django.utils import timezone
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    username_field = 'email'
+    username_field = 'username'
 
     def validate(self, attrs):
-        email = attrs.get('email') or attrs.get('username')
+        username = attrs.get('username') or attrs.get('email')
         password = attrs.get('password')
 
-        if not email:
-            raise serializers.ValidationError({'email': ['This field is required.']})
+        if not username:
+            raise serializers.ValidationError({'username': ['This field is required.']})
         if not password:
             raise serializers.ValidationError({'password': ['This field is required.']})
 
-        attrs = {'email': email, 'password': password}
+        attrs = {'username': username, 'password': password}
         return super().validate(attrs)
 
 

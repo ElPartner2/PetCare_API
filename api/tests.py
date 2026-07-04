@@ -17,7 +17,7 @@ class JWTAuthTests(TestCase):
         client = APIClient()
         response = client.post(
             '/api/token/',
-            {'email': 'admin@example.com', 'password': 'securepass123'},
+            {'username': 'admin', 'password': 'securepass123'},
             format='json',
         )
 

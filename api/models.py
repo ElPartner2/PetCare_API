@@ -9,11 +9,11 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20)
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.email})"
+        return self.username or self.email
 
 
 class Pet(models.Model):
