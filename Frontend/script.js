@@ -33,7 +33,9 @@ loginForm.addEventListener('submit', async (e) => {
         });
 
         if (!response.ok) {
-            throw new Error('Falló la autenticación');
+            const errorData = await response.json().catch(() => ({}));
+            const message = errorData.detail || errorData.non_field_errors?.[0] || 'Falló la autenticación';
+            throw new Error(message);
         }
 
         const data = await response.json();
@@ -45,6 +47,7 @@ loginForm.addEventListener('submit', async (e) => {
         loginError.classList.add('hidden');
         showDashboard();
     } catch (error) {
+        loginError.textContent = error.message || 'Credenciales incorrectas. Intenta de nuevo.';
         loginError.classList.remove('hidden');
         console.error(error);
     }

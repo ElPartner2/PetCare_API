@@ -1,6 +1,24 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User, Pet, MedicalRecord
 from django.utils import timezone
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
+
+    def validate(self, attrs):
+        email = attrs.get('email') or attrs.get('username')
+        password = attrs.get('password')
+
+        if not email:
+            raise serializers.ValidationError({'email': ['This field is required.']})
+        if not password:
+            raise serializers.ValidationError({'password': ['This field is required.']})
+
+        attrs = {'email': email, 'password': password}
+        return super().validate(attrs)
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
