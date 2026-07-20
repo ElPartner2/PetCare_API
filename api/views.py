@@ -1,13 +1,14 @@
-from rest_framework import viewsets, status
+from rest_framework import serializers, viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models.deletion import ProtectedError
 from .models import Pet, MedicalRecord
 from .serializers import PetSerializer, MedicalRecordSerializer
 
 class PetViewSet(viewsets.ModelViewSet):
-    
+
     serializer_class = PetSerializer
     permission_classes = [IsAuthenticated]
     
@@ -21,9 +22,14 @@ class PetViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         try:
             instance.delete()
-            return Response({"detail": "Pet deleted successfully from the database."}, status=status.HTTP_200_OK)
+            return Response(status=status.HTTP_204_NO_CONTENT)
         except DjangoValidationError as e:
-            return Response({'detail': e.message}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': e.message}, status=status.HTTP_409_CONFLICT)
+        except ProtectedError:
+            return Response(
+                {'detail': 'Cannot delete a pet with associated medical records.'},
+                status=status.HTTP_409_CONFLICT,
+            )
 
 class MedicalRecordViewSet(viewsets.ModelViewSet):
     
@@ -31,7 +37,18 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return MedicalRecord.objects.filter(pet__owner=self.request.user, is_deleted=False)
+        queryset = MedicalRecord.objects.filter(
+            pet__owner=self.request.user,
+            is_deleted=False,
+        )
+        pet_id = self.request.query_params.get('pet')
+        if pet_id:
+            try:
+                pet_id = serializers.UUIDField().run_validation(pet_id)
+            except serializers.ValidationError:
+                raise serializers.ValidationError({'pet': 'Must be a valid UUID.'})
+            queryset = queryset.filter(pet_id=pet_id)
+        return queryset
     
     def perform_create(self, serializer):
         pet = serializer.validated_data.get('pet')
@@ -48,5 +65,4 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.soft_delete()
-        return Response({"detail": "Medical record successfully archived (soft deleted)"}, status=status.HTTP_200_OK)
-    
+        return Response(status=status.HTTP_204_NO_CONTENT)

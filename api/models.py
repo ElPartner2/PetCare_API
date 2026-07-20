@@ -34,17 +34,12 @@ class Pet(models.Model):
         return f"{self.name} ({self.owner.first_name} {self.owner.last_name})"
     
     def delete(self, *args, **kwargs):
-        
-        #1. Check if the pet is active before allowing deletion
         if self.status == 'active':
             raise ValidationError("Cannot delete an active pet. Please change the status to 'inactive' before deleting.")
-        
-       #2. Check if the pet is active medical records in the database before allowing deletion
-        active_medical_records = self.medical_records.filter(is_deleted=False).exists()
-        if active_medical_records:
-            raise ValidationError("Cannot delete a pet with active medical records. Please delete or mark the medical records as deleted before deleting the pet.") 
-        
-        #3. If the pet is inactive and has no active medical records, proceed with deletion
+
+        if self.medical_records.exists():
+            raise ValidationError("Cannot delete a pet with associated medical records.")
+
         super().delete(*args, **kwargs)
                    
         
