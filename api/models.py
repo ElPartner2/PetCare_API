@@ -68,4 +68,7 @@ class MedicalRecord(models.Model):
         self.save()
 
     def __str__(self):
-        return f"{self.type_record} for {self.pet.name} ({self.pet.owner.first_name} {self.pet.owner.last_name} ({self.pet.application_date.strftime('%Y-%m-%d')}))"
+        return (
+            f"{self.type_record} for {self.pet.name} "
+            f"({self.application_date.strftime('%Y-%m-%d')})"
+        )

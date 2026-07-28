@@ -14,7 +14,7 @@ PetCare API is a Django REST Framework service for managing pet profiles and the
 
 - `User`
   - Custom user model extending Django's `AbstractUser`
-  - Uses email as the login field
+  - Uses username as the login field
   - Includes `phone` and unique email validation
 
 - `Pet`
@@ -28,6 +28,7 @@ PetCare API is a Django REST Framework service for managing pet profiles and the
 ## API Endpoints
 
 - `POST /api/token/` — obtain JWT access and refresh tokens
+- `POST /api/users/register/` — register a user without authentication
 - `POST /api/token/refresh/` — refresh JWT access token
 - `POST /api/token/verify/` — verify JWT token validity
 - `GET/POST /api/pets/` — list or create pets owned by the authenticated user
@@ -54,7 +55,10 @@ PetCare API is a Django REST Framework service for managing pet profiles and the
 
 ## Authentication
 
-All API routes under `/api/` require JWT authentication. The project uses `JWTAuthentication` as the default REST framework authentication class.
+Pet and medical-record routes require JWT authentication. User registration is
+public; it creates an account but does not issue tokens or sign the user in.
+The project uses `JWTAuthentication` as the default REST framework authentication
+class, and `username` remains the login credential.
 
 ## Settings and Configuration
 

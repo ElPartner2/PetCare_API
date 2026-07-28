@@ -9,6 +9,78 @@ from rest_framework.test import APIClient
 from .models import MedicalRecord, Pet
 
 
+class UserRegistrationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = '/api/users/register/'
+        self.payload = {
+            'username': 'newowner',
+            'email': 'NewOwner@Example.com',
+            'first_name': 'New',
+            'last_name': 'Owner',
+            'phone': '5551234567',
+            'password': 'A-strong-password-938!',
+            'password_confirm': 'A-strong-password-938!',
+        }
+
+    def test_registration_is_public_and_hashes_password(self):
+        response = self.client.post(self.url, self.payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user = get_user_model().objects.get(username='newowner')
+        self.assertTrue(user.check_password(self.payload['password']))
+        self.assertNotEqual(user.password, self.payload['password'])
+        self.assertEqual(user.email, 'NewOwner@example.com')
+        self.assertNotIn('password', response.data)
+        self.assertNotIn('password_confirm', response.data)
+
+    def test_mismatched_passwords_are_rejected(self):
+        payload = {**self.payload, 'password_confirm': 'Different-password-1!'}
+
+        response = self.client.post(self.url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password_confirm', response.data)
+
+    def test_weak_password_is_rejected(self):
+        payload = {
+            **self.payload,
+            'password': 'password',
+            'password_confirm': 'password',
+        }
+
+        response = self.client.post(self.url, payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+
+    def test_duplicate_username_and_email_are_rejected_by_field(self):
+        user_model = get_user_model()
+        user_model.objects.create_user(
+            username=self.payload['username'],
+            email='first@example.com',
+            password='A-strong-password-938!',
+            phone='1',
+        )
+        username_response = self.client.post(self.url, self.payload, format='json')
+        email_payload = {
+            **self.payload,
+            'username': 'anotherowner',
+            'email': 'FIRST@EXAMPLE.COM',
+        }
+        email_response = self.client.post(self.url, email_payload, format='json')
+
+        self.assertEqual(username_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('username', username_response.data)
+        self.assertEqual(email_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', email_response.data)
+
+    def test_users_are_not_publicly_listable(self):
+        response = self.client.get('/api/users/')
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class JWTAuthTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -80,6 +152,37 @@ class AuthenticationTests(APITestCase):
 
 
 class PetAPITests(APITestCase):
+    def test_patch_can_change_status_without_changing_owner(self):
+        pet = self.create_pet(status='active')
+
+        response = self.client.patch(
+            f'/api/pets/{pet.id}/',
+            {'status': 'inactive', 'owner': str(self.other_user.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pet.refresh_from_db()
+        self.assertEqual(pet.status, 'inactive')
+        self.assertEqual(pet.owner, self.user)
+
+    def test_future_birth_date_and_unknown_status_are_rejected(self):
+        pet = self.create_pet()
+
+        future_response = self.client.patch(
+            f'/api/pets/{pet.id}/',
+            {'birth_date': str(timezone.localdate() + timedelta(days=1))},
+            format='json',
+        )
+        status_response = self.client.patch(
+            f'/api/pets/{pet.id}/', {'status': 'lost'}, format='json'
+        )
+
+        self.assertEqual(future_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('birth_date', future_response.data)
+        self.assertEqual(status_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('status', status_response.data)
+
     def test_pet_crud(self):
         create_response = self.client.post(
             '/api/pets/',
@@ -162,6 +265,55 @@ class PetAPITests(APITestCase):
 
 
 class MedicalRecordAPITests(APITestCase):
+    def test_patch_updates_editable_fields_but_not_application_date(self):
+        application_date = timezone.now() - timedelta(days=2)
+        record = self.create_record(application_date=application_date)
+        booster_date = timezone.now() + timedelta(days=30)
+
+        response = self.client.patch(
+            f'/api/medical-records/{record.id}/',
+            {
+                'type_record': 'vaccination',
+                'description': 'Updated through patch',
+                'booster_date': booster_date.isoformat(),
+                'application_date': (timezone.now() + timedelta(days=10)).isoformat(),
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        record.refresh_from_db()
+        self.assertEqual(record.type_record, 'vaccination')
+        self.assertEqual(record.description, 'Updated through patch')
+        self.assertEqual(record.application_date, application_date)
+        self.assertEqual(record.booster_date, booster_date)
+
+    def test_record_cannot_be_reassigned_to_foreign_pet(self):
+        record = self.create_record()
+        foreign_pet = self.create_pet(owner=self.other_user)
+
+        response = self.client.patch(
+            f'/api/medical-records/{record.id}/',
+            {'pet': str(foreign_pet.id)},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        record.refresh_from_db()
+        self.assertNotEqual(record.pet, foreign_pet)
+
+    def test_foreign_record_cannot_be_updated(self):
+        foreign_pet = self.create_pet(owner=self.other_user)
+        record = self.create_record(pet=foreign_pet)
+
+        response = self.client.patch(
+            f'/api/medical-records/{record.id}/',
+            {'description': 'No access'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_medical_record_crud_and_soft_delete(self):
         pet = self.create_pet()
         create_response = self.client.post(

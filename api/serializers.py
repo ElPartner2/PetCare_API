@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User, Pet, MedicalRecord
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 
 
@@ -25,6 +27,65 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone']
         read_only_fields = ['id']
+
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    password_confirm = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'phone',
+            'password',
+            'password_confirm',
+        ]
+        read_only_fields = ['id']
+        extra_kwargs = {
+            'username': {'required': True},
+            'email': {'required': True},
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+            'phone': {'required': True},
+        }
+
+    def validate_email(self, value):
+        normalized_email = User.objects.normalize_email(value)
+        if User.objects.filter(email__iexact=normalized_email).exists():
+            raise serializers.ValidationError(
+                'A user with this email already exists.'
+            )
+        return normalized_email
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({
+                'password_confirm': 'Passwords do not match.'
+            })
+
+        candidate = User(
+            username=attrs.get('username'),
+            email=attrs.get('email'),
+            first_name=attrs.get('first_name'),
+            last_name=attrs.get('last_name'),
+            phone=attrs.get('phone'),
+        )
+        try:
+            validate_password(attrs['password'], user=candidate)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        password = validated_data.pop('password')
+        return User.objects.create_user(password=password, **validated_data)
         
 class MedicalRecordSerializer(serializers.ModelSerializer):
     class Meta:

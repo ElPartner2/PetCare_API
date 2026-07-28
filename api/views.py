@@ -1,11 +1,21 @@
 from rest_framework import serializers, viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.generics import CreateAPIView
 from rest_framework.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models.deletion import ProtectedError
 from .models import Pet, MedicalRecord
-from .serializers import PetSerializer, MedicalRecordSerializer
+from .serializers import (
+    MedicalRecordSerializer,
+    PetSerializer,
+    UserRegistrationSerializer,
+)
+
+
+class UserRegistrationView(CreateAPIView):
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
 
 class PetViewSet(viewsets.ModelViewSet):
 
@@ -51,15 +61,19 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        pet = serializer.validated_data.get('pet')
-        if pet.owner != self.request.user:
-            raise PermissionDenied("You do not have permission to add a medical record for this pet.")
+        pet = serializer.validated_data['pet']
+        if pet.owner_id != self.request.user.id:
+            raise PermissionDenied(
+                'You cannot add a medical record to another user’s pet.'
+            )
         serializer.save()
     
     def perform_update(self, serializer):
         pet = serializer.validated_data.get('pet')
-        if pet and pet.owner != self.request.user:
-            raise PermissionDenied("You do not have permission to update a medical record for this pet.")
+        if pet and pet.owner_id != self.request.user.id:
+            raise PermissionDenied(
+                'You cannot reassign a medical record to another user’s pet.'
+            )
         serializer.save()
         
     def destroy(self, request, *args, **kwargs):
